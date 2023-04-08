@@ -2,6 +2,8 @@ import requests
 import os
 import json
 from tqdm import tqdm
+import datetime
+
 
 def token_vk(file_name):
     """Функция для чтения токена и ID пользователя из файла"""
@@ -24,6 +26,7 @@ def max_size_photo(photo):
             needed_elem = i
     return photo[needed_elem].get('url'), photo[needed_elem].get('type')
 
+
 class Vk:
     def __init__(self, token_list, version='5.131'):
         """
@@ -35,12 +38,26 @@ class Vk:
         self.start_params = {'access_token': self.token, 'v': self.version}
         self.json, self.export_dict = self.sort_photo_params()
 
+    def real_token_vk(self):
+        """
+        Метод для обработки ID пользователя вк - id и screen_name
+        """
+        id = self.id
+        if id.isdigit():
+            return id
+        else:
+            url = 'https://api.vk.com/method/users.get'
+            params = {'user_ids': id}
+            res = requests.get(url, params={**self.start_params, **params}).json()['response']
+            for i in res:
+                return i['id']
+
     def photo_info(self):
         """
         Метод для получения количества фотографий по заданным параметрам
         """
         url = 'https://api.vk.com/method/photos.get'
-        params = {'owner_id': self.id,
+        params = {'owner_id': self.real_token_vk(),
                   'album_id': 'profile',
                   'photo_sizes': 1,
                   'extended': 1,
@@ -55,12 +72,13 @@ class Vk:
         """
         photo_count, photo_items = self.photo_info()
         result = {}
+        now = datetime.datetime.now()
         for i in range(photo_count):
             likes_count = photo_items[i]['likes']['count']
             url_download, picture_size = max_size_photo(photo_items[i]['sizes'])
             new_value = result.get(likes_count, [])
-            new_value.append({'likes_count': likes_count,
-                              'add_name': likes_count,
+            new_value.append({'likes_count': f'{likes_count}',
+                              'add_name': f'{likes_count}_{now.strftime("%d-%m-%Y %H:%M")}',
                               'url_picture': url_download,
                               'size': picture_size})
             result[likes_count] = new_value
@@ -74,12 +92,13 @@ class Vk:
         sorted_dict = {}
         photo_dict = self.photo_params()
         counter = 0
+        now = datetime.datetime.now()
         for i in photo_dict.keys():
             for value in photo_dict[i]:
                 if len(photo_dict[i]) == 1:
-                    file_name = f'{value["likes_count"]}.jpeg'
+                    file_name = f'{value["likes_count"]}_{now.strftime("%d-%m-%Y")}.jpeg'
                 else:
-                    file_name = f'{value["likes_count"]} {value["add_name"]}.jpeg'
+                    file_name = f'{value["likes_count"]}_{now.strftime("%d-%m-%Y")}.jpeg'
                 json_list.append({'file name': file_name, 'size': value["size"]})
                 if value["likes_count"] == 0:
                     sorted_dict[file_name] = photo_dict[i][counter]['url_picture']
@@ -160,4 +179,5 @@ if __name__ == '__main__':
 
     # Создаем экземпляр класса Yandex с параметрами: "Имя папки", "Токен" и количество скачиваемых файлов
     my_yandex = Yadi('"NEW FOLDER"', token_vk(tokenYandex), 5)
-    my_yandex.create_copy(my_VK.export_dict)  # Вызываем метод create_copy для копирования фотографий с VK на Я-диск
+    my_yandex.create_copy(my_VK.export_dict)
+    # Вызываем метод create_copy для копирования фотографий с VK на Я-диск
